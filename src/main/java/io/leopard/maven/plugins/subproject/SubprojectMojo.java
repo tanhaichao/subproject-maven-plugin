@@ -1,7 +1,9 @@
 package io.leopard.maven.plugins.subproject;
 
 import java.io.File;
+import java.io.IOException;
 import java.io.InputStream;
+import java.io.Writer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -15,10 +17,12 @@ import org.apache.maven.model.Dependency;
 import org.apache.maven.model.Model;
 import org.apache.maven.model.Resource;
 import org.apache.maven.model.io.xpp3.MavenXpp3Reader;
+import org.apache.maven.model.io.xpp3.MavenXpp3Writer;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
 import org.apache.maven.project.MavenProject;
+import org.codehaus.plexus.util.WriterFactory;
 
 /**
  * include子项目一起打包.
@@ -78,6 +82,8 @@ public class SubprojectMojo extends AbstractMojo {
 	@Override
 	public void execute() throws MojoExecutionException, MojoFailureException {
 
+		project.getDependencyArtifacts().add(artifactFactory.createArtifact("io.leopard.data4j", "data4j-memdb", "0.0.1-SNAPSHOT", "compile", "jar"));
+
 		{
 			// @SuppressWarnings("unchecked")
 			Set<Artifact> set = project.getDependencyArtifacts();
@@ -86,7 +92,6 @@ public class SubprojectMojo extends AbstractMojo {
 				String artifactId = artifact.getArtifactId();
 				dependencyArtifactMap.put(this.getKey(groupId, artifactId), artifact);
 			}
-
 		}
 		File root = project.getBasedir().getParentFile();
 
@@ -116,19 +121,42 @@ public class SubprojectMojo extends AbstractMojo {
 			// </dependency>
 		}
 
+		try {
+			this.updatePom();
+		}
+		catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
+
+	protected void updatePom() throws IOException {
+		Map<String, Dependency> dependencyMap = new HashMap<String, Dependency>();
+
+		{
+			List<Dependency> dependencyList = project.getOriginalModel().getDependencies();
+			for (Dependency dependency : dependencyList) {
+				String key = this.getKey(dependency.getGroupId(), dependency.getArtifactId());
+				dependencyMap.put(key, dependency);
+			}
+		}
 		if (dependencies != null) {
 			for (SubprojectDependency dependency : dependencies) {
 				String key = this.getKey(dependency.getGroupId(), dependency.getArtifactId());
-				Artifact artifact = this.dependencyArtifactMap.get(key);
-				if (artifact != null) {
-					// artifact.setScope(dependency.getScope());
-					project.getDependencyArtifacts().add(
-							artifactFactory.createArtifact(dependency.getGroupId(), dependency.getArtifactId(), artifact.getVersion(), dependency.getScope(), artifact.getType()));
+				Dependency dependency2 = dependencyMap.get(key);
+				if (dependency2 != null) {
+					dependency2.setScope(dependency.getScope());
 				}
 				// System.err.println("dependency:" + dependency + " artifact:" + artifact);
 			}
 			// throw new RuntimeException();
 		}
+		File buildDir = new File(project.getBuild().getDirectory());
+		buildDir.mkdirs();
+		File pomFile = new File(buildDir, "pom-subproject.xml");
+		Writer writer = WriterFactory.newXmlWriter(pomFile);
+		new MavenXpp3Writer().write(writer, project.getOriginalModel());
+		writer.close();
+		project.setFile(pomFile);
 	}
 
 	@SuppressWarnings("unchecked")
@@ -153,6 +181,14 @@ public class SubprojectMojo extends AbstractMojo {
 
 				if (version != null && scope != null) {
 					if (!dependencyArtifactMap.containsKey(this.getKey(groupId, artifactId))) {
+						Dependency dependency2 = new Dependency();
+						dependency2.setGroupId(groupId);
+						dependency2.setArtifactId(artifactId);
+						dependency2.setScope(scope);
+						dependency2.setVersion(version);
+						dependency2.setType(type);
+						// project.getOriginalModel().getDependencies().add(dependency2);
+
 						project.getDependencyArtifacts().add(artifactFactory.createArtifact(groupId, artifactId, version, scope, type));
 					}
 				}
