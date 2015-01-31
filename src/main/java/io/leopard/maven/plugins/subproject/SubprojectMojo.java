@@ -74,11 +74,12 @@ public class SubprojectMojo extends AbstractMojo {
 		return groupId + ":" + artifactId;
 	}
 
+	@SuppressWarnings("unchecked")
 	@Override
 	public void execute() throws MojoExecutionException, MojoFailureException {
 
 		{
-			@SuppressWarnings("unchecked")
+			// @SuppressWarnings("unchecked")
 			Set<Artifact> set = project.getDependencyArtifacts();
 			for (Artifact artifact : set) {
 				String groupId = artifact.getGroupId();
@@ -120,24 +121,14 @@ public class SubprojectMojo extends AbstractMojo {
 				String key = this.getKey(dependency.getGroupId(), dependency.getArtifactId());
 				Artifact artifact = this.dependencyArtifactMap.get(key);
 				if (artifact != null) {
-					artifact.setScope(dependency.getScope());
+					// artifact.setScope(dependency.getScope());
+					project.getDependencyArtifacts().add(
+							artifactFactory.createArtifact(dependency.getGroupId(), dependency.getArtifactId(), artifact.getVersion(), dependency.getScope(), artifact.getType()));
 				}
-				// System.err.println("dependency:" + dependency);
+				// System.err.println("dependency:" + dependency + " artifact:" + artifact);
 			}
+			// throw new RuntimeException();
 		}
-
-		// dependency>
-		// <groupId>org.springframework.data</groupId>
-		// <artifactId>spring-data-redis</artifactId>
-		// <version>1.1.0.M1</version>
-		// <scope>provided</scope>
-		// </dependency>
-		// <dependency>
-		// <groupId>com.whalin</groupId>
-		// <artifactId>Memcached-Java-Client</artifactId>
-		// <version>3.0.2</version>
-		// <scope>provided</scope>
-		// </dependency>
 	}
 
 	@SuppressWarnings("unchecked")
