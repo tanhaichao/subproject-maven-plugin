@@ -2,9 +2,12 @@ package io.leopard.maven.plugins.subproject;
 
 import java.io.File;
 import java.io.InputStream;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import org.apache.commons.io.FileUtils;
+import org.apache.maven.artifact.Artifact;
 import org.apache.maven.artifact.factory.ArtifactFactory;
 import org.apache.maven.model.Dependency;
 import org.apache.maven.model.Model;
@@ -51,10 +54,25 @@ public class SubprojectMojo extends AbstractMojo {
 	 * @component
 	 */
 	private ArtifactFactory artifactFactory;
+	private Set<String> dependencyArtifactSet = new HashSet<String>();
+
+	protected String getKey(String groupId, String artifactId) {
+		return groupId + ":" + artifactId;
+	}
 
 	@Override
 	public void execute() throws MojoExecutionException, MojoFailureException {
 
+		{
+			@SuppressWarnings("unchecked")
+			Set<Artifact> set = project.getDependencyArtifacts();
+			for (Artifact artifact : set) {
+				String groupId = artifact.getGroupId();
+				String artifactId = artifact.getArtifactId();
+				dependencyArtifactSet.add(this.getKey(groupId, artifactId));
+			}
+
+		}
 		File root = project.getBasedir().getParentFile();
 
 		// System.err.println("subproject add-source:" + project.getBasedir().toString());
@@ -111,9 +129,11 @@ public class SubprojectMojo extends AbstractMojo {
 				String version = dependency.getVersion();
 				String scope = dependency.getScope();
 				String type = dependency.getType();
+
 				if (version != null && scope != null) {
-					// System.err.println("dependency:" + dependency.toString() + " scope:" + scope);
-					project.getDependencyArtifacts().add(artifactFactory.createArtifact(groupId, artifactId, version, scope, type));
+					if (!dependencyArtifactSet.contains((this.getKey(groupId, artifactId)))) {
+						project.getDependencyArtifacts().add(artifactFactory.createArtifact(groupId, artifactId, version, scope, type));
+					}
 				}
 			}
 		}
