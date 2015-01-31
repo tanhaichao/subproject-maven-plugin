@@ -2,8 +2,10 @@ package io.leopard.maven.plugins.subproject;
 
 import java.io.File;
 import java.io.InputStream;
-import java.util.HashSet;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import org.apache.commons.io.FileUtils;
@@ -11,6 +13,7 @@ import org.apache.maven.artifact.Artifact;
 import org.apache.maven.artifact.factory.ArtifactFactory;
 import org.apache.maven.model.Dependency;
 import org.apache.maven.model.Model;
+import org.apache.maven.model.Resource;
 import org.apache.maven.model.io.xpp3.MavenXpp3Reader;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
@@ -32,14 +35,25 @@ import org.apache.maven.project.MavenProject;
 // * @execute phase="generate-sources"
 // @Mojo(name = "add-sources", defaultPhase = LifecyclePhase.GENERATE_SOURCES, threadSafe = true)
 public class SubprojectMojo extends AbstractMojo {
+
+	private static List<String> resourcesExclude = new ArrayList<String>();
+
+	static {
+		resourcesExclude.add("test.txt");
+	}
 	/**
-	 * The Maven project.
-	 *
 	 * @parameter
 	 * @required
 	 * @readonly
 	 */
 	private String[] sources;
+
+	/**
+	 * @parameter
+	 * @required
+	 * @readonly
+	 */
+	private SubprojectDependency[] dependencies;
 
 	/**
 	 * The Maven project.
@@ -54,7 +68,7 @@ public class SubprojectMojo extends AbstractMojo {
 	 * @component
 	 */
 	private ArtifactFactory artifactFactory;
-	private Set<String> dependencyArtifactSet = new HashSet<String>();
+	private Map<String, Artifact> dependencyArtifactMap = new HashMap<String, Artifact>();
 
 	protected String getKey(String groupId, String artifactId) {
 		return groupId + ":" + artifactId;
@@ -69,7 +83,7 @@ public class SubprojectMojo extends AbstractMojo {
 			for (Artifact artifact : set) {
 				String groupId = artifact.getGroupId();
 				String artifactId = artifact.getArtifactId();
-				dependencyArtifactSet.add(this.getKey(groupId, artifactId));
+				dependencyArtifactMap.put(this.getKey(groupId, artifactId), artifact);
 			}
 
 		}
@@ -83,8 +97,14 @@ public class SubprojectMojo extends AbstractMojo {
 			File subDir = new File(moduleDir, "src/main/java");
 			// System.err.println("subDir:" + subDir.getAbsolutePath());
 			this.project.addCompileSourceRoot(subDir.getAbsolutePath());
-			if (getLog().isInfoEnabled()) {
-				getLog().info("Source directory: " + subDir + " added.");
+			// if (getLog().isInfoEnabled()) {
+			// getLog().info("Source directory: " + subDir + " added.");
+			// }
+			{
+				Resource resource = new Resource();
+				resource.setDirectory(moduleDir.getAbsolutePath() + "/src/main/resources");
+				resource.setExcludes(resourcesExclude);
+				project.addResource(resource);
 			}
 
 			this.addDependencyArtifacts(new File(moduleDir, "pom.xml"));
@@ -93,7 +113,17 @@ public class SubprojectMojo extends AbstractMojo {
 			// <artifactId>jedis</artifactId>
 			// <version>2.5.1</version>
 			// </dependency>
+		}
 
+		if (dependencies != null) {
+			for (SubprojectDependency dependency : dependencies) {
+				String key = this.getKey(dependency.getGroupId(), dependency.getArtifactId());
+				Artifact artifact = this.dependencyArtifactMap.get(key);
+				if (artifact != null) {
+					artifact.setScope(dependency.getScope());
+				}
+				// System.err.println("dependency:" + dependency);
+			}
 		}
 
 		// dependency>
@@ -131,7 +161,7 @@ public class SubprojectMojo extends AbstractMojo {
 				String type = dependency.getType();
 
 				if (version != null && scope != null) {
-					if (!dependencyArtifactSet.contains((this.getKey(groupId, artifactId)))) {
+					if (!dependencyArtifactMap.containsKey(this.getKey(groupId, artifactId))) {
 						project.getDependencyArtifacts().add(artifactFactory.createArtifact(groupId, artifactId, version, scope, type));
 					}
 				}
